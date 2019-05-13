@@ -9,16 +9,27 @@ import typing
 import asyncio
 from urllib.parse import urlencode
 from collections import namedtuple
+from logging import getLogger
 
 DIR_UP = 1
 DIR_DOWN = 0
 MAX_P_TIME = 0.25
 
 InputQuery = namedtuple('InputQuery', ['pt', 'click', 'cnt', 'm'], defaults=[0]*4)
+lg = getLogger(__name__)
+
+class MegaException(Exception):
+    pass
+
+class Unauthorised(MegaException):
+    pass
 
 class Mega(object):
 
-    def __init__(self, host, port_listen: int = None, cb_map: typing.Mapping[typing.NamedTuple, typing.Callable] = None):
+    def __init__(self
+                 , host
+                 , port_listen: int = None
+                 , cb_map: typing.Mapping[InputQuery, typing.Callable[[InputQuery], typing.Any]] = None):
         """
 
         :param host: ip-address of mega (without http part)
@@ -27,31 +38,44 @@ class Mega(object):
         """
         self._host = host
         self.lck = asyncio.locks.Lock()
-        self.cb_map = cb_map
+        self.cb_map = cb_map or {}
+        self.port_listen = port_listen
+        asyncio.ensure_future(self.start_listen(port_listen))
 
     async def request(self, *, wait=None, **kwargs):
         async with self.lck:
-            async with aiohttp.request('post', url=f'{self._host}?{urlencode(kwargs)}') as req:
+            url = f'http://{self._host}?{urlencode(kwargs)}'
+            lg.debug(f'request {url}')
+            async with aiohttp.request('get', url=url) as req:
                 if wait:
                     await asyncio.sleep(wait)
-                return await req.text()
+                ret = await req.text()
+                if ret == 'Unauthorized':
+                    raise Unauthorised(f'Unauthorised {self._host}')
+                return ret
 
     async def handle(self, req: web.Request):
-        query = InputQuery(**req.query)
+        query = InputQuery(**{x: int(y) for x, y in req.query.items()})
+        lg.debug(f'handle request {query}')
         cb = self.cb_map.get(query)
         if not cb is None:
             if asyncio.iscoroutinefunction(cb):
-                asyncio.ensure_future(cb())
+                asyncio.ensure_future(cb(query))
             else:
-                cb()
-        return web.Response()
+                cb(query)
+        return web.Response(text='OK')
 
-    def start_listen(self):
+    async def start_listen(self, port):
         """
         Start listen port for incoming messages
         :return:
         """
-        # todo: нужно реализовать старт микросервера
+        server = web.Server(self.handle)
+        runner = web.ServerRunner(server)
+        await runner.setup()
+        site = web.TCPSite(runner, 'localhost', port)
+        await site.start()
+        lg.info(f'Mega-d listener started on port {port}')
 
 
 class Relay(object):
@@ -116,19 +140,27 @@ class Servo(object):
 
 class OneWireBus(object):
 
-    def __init__(self, mega: Mega, port: int, cb_map: typing.Mapping[str, typing.Callable]):
+    def __init__(self, mega: Mega, port: int, cb_map: typing.Mapping[str, typing.Callable[[float], typing.Any]] = None):
         """
         Обновление температуры, по обновлению вызывается колбэк из словаря cb
         :param mega:
-        :param port:
-        :param cb_map: callback
+        :param port: порт на котором зарегистрирована шина
+        :param cb_map: мэппинг callback-ов на обновление температуры
+            ключи - адрес датчика, колбэк должен принимать на вход float - это значение текущей температуры
         """
         self.mega = mega
         self.port = port
-        self.cb_map = cb_map
+        self.cb_map = cb_map or {}
 
     async def update(self):
-        txt = await self.mega.request(pt=self.port, cmd='list')
+        await self.mega.request(pt=self.port, cmd='conv')
+        while True:
+            await asyncio.sleep(1)
+            txt = await self.mega.request(pt=self.port, cmd='list')
+            lg.debug(f'Update temp recieved: {txt}')
+            if txt != 'Busy':
+                break
+
         for x in txt.split(';'):
             key, temp = x.split(':')
             temp = float(temp)
