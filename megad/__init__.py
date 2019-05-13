@@ -9,7 +9,9 @@ import typing
 import asyncio
 from urllib.parse import urlencode
 from collections import namedtuple
-from logging import getLogger
+from logging import getLogger, basicConfig
+
+basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 DIR_UP = 1
 DIR_DOWN = 0
@@ -23,6 +25,9 @@ class MegaException(Exception):
 
 class Unauthorised(MegaException):
     pass
+
+def make_query(query: dict):
+    return '&'.join([f'{x}={y}' for x, y in query.items()])
 
 class Mega(object):
 
@@ -44,14 +49,15 @@ class Mega(object):
 
     async def request(self, *, wait=None, **kwargs):
         async with self.lck:
-            url = f'http://{self._host}?{urlencode(kwargs)}'
-            lg.debug(f'request {url}')
+            url = f'http://{self._host}?{make_query(kwargs)}'
+            lg.debug(f'request {url}, wait {wait}')
             async with aiohttp.request('get', url=url) as req:
-                if wait:
-                    await asyncio.sleep(wait)
                 ret = await req.text()
                 if ret == 'Unauthorized':
                     raise Unauthorised(f'Unauthorised {self._host}')
+                if wait:
+                    await asyncio.sleep(wait)
+                lg.debug(f'response "{ret}" to {url}')
                 return ret
 
     async def handle(self, req: web.Request):
@@ -82,8 +88,8 @@ class Relay(object):
     """
     Базовое реле - вкл, выкл
     """
-    def __init__(self, mega, port, reverse:bool = False):
-        self.mega = Mega
+    def __init__(self, mega: Mega, port, reverse:bool = False):
+        self.mega = mega
         self.port = port
         self.reverse=reverse
 
@@ -103,39 +109,70 @@ class Relay(object):
 class Servo(object):
     """
     Серво-привод на двух реле
-    Во время движения блокирует всю мегу
+    Во время движения блокирует всю мегу, на старте калибруется путем полного прогона в закрытое состояние,
+        и не доступно для управления пока не закончится калибровка, по завершении калибровки вызывается калибровочный
+        кол-бэк (в нем можно например вызвать установку текущего значения)
     """
-    def __init__(self, move_rel: Relay, dir_rel: Relay, close_time: int, calibrated_cb: typing.Callable = None):
+    def __init__(self
+                 , move_rel: Relay
+                 , dir_rel: Relay
+                 , close_time: int
+                 , calibrate: bool = False
+                 , calibrated_cb: typing.Callable = None
+                 , value_set_cb: typing.Callable = None
+                 ):
         """
 
         :param move_rel: реле для движения
         :param dir_rel: реле для выбора направления
         :param close_time: время закрытия
+        :param calibrate: если True, инициировать калибровку сразу после создания
         :param calibrated_cb: колбэк, вызывается по завершении калибровки
+        :param value_set_cb: колбэк, вызывается по завершении работы привода с новым значением текущего положения
+            в качестве параметра (можно использовать для уведомления сервера о новом положении привода)
         """
         self.move_rel = move_rel
         self.dir_rel = dir_rel
         self.close_time = close_time
-        self.value = 0
+        self._value: float = 0
         self.calibrated_cb = calibrated_cb
-        asyncio.ensure_future(self.calibrate())
+        self.value_set_cb = value_set_cb
+        self.lck = asyncio.locks.Lock()
+        if calibrate:
+            asyncio.ensure_future(self.calibrate())
+
+    @property
+    def value(self):
+        """
+        Current servo position in percents (0 to 1)
+        :return:
+        """
+        return self._value
 
     async def calibrate(self):
-        await self.dir_rel.turn_on()
-        await self.move_rel.turn_on()
-        await asyncio.sleep(self.close_time + 1)
-        await self.dir_rel.turn_off()
-        await asyncio.sleep(self.close_time + 1)
-        self.calibrated_cb()
+        async with self.lck:
+            await self.dir_rel.turn_off()
+            await self.move_rel.turn_on()
+            await asyncio.sleep(self.close_time + 1)
+            if self.calibrated_cb:
+                self.calibrated_cb()
 
     async def set_value(self, value):
-        p_value = ((self.value - value) / 100) * self.close_time
-        if p_value > 0:
-            await self.dir_rel.turn_on()
-        else:
-            await self.dir_rel.turn_off()
-        await self.move_rel.turn_on()
-        await self.move_rel.turn_on_and_off(p_value)
+        assert 0 <= value <= 1, 'new value of servo must be between 0 and 1'
+        async with self.lck:
+            p_value = (value - self._value) * self.close_time
+            if p_value > 0:
+                await self.dir_rel.turn_on()
+            else:
+                await self.dir_rel.turn_off()
+            await self.move_rel.turn_on()
+            await self.move_rel.turn_on_and_off(abs(p_value))
+            self._value += round(p_value * 10) / (self.close_time * 10)
+            if self.value_set_cb is not None:
+                if asyncio.iscoroutinefunction(self.value_set_cb):
+                    asyncio.ensure_future(self.value_set_cb(self._value))
+                else:
+                    self.value_set_cb(self._value)
 
 
 class OneWireBus(object):
