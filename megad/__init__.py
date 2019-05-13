@@ -33,19 +33,16 @@ class Mega(object):
 
     def __init__(self
                  , host
-                 , port_listen: int = None
                  , cb_map: typing.Mapping[InputQuery, typing.Callable[[InputQuery], typing.Any]] = None):
         """
 
         :param host: ip-address of mega (without http part)
-        :param port_listen: port to listen for incoming messages
         :param cb_map: callbacks to call on incoming events
         """
         self._host = host
         self.lck = asyncio.locks.Lock()
         self.cb_map = cb_map or {}
-        self.port_listen = port_listen
-        asyncio.ensure_future(self.start_listen(port_listen))
+        # asyncio.ensure_future(self.start_listen(port_listen))
 
     async def request(self, *, wait=None, **kwargs):
         async with self.lck:
