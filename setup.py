@@ -1,11 +1,12 @@
-from setuptools import setup
+from distutils.core import setup
 
 setup(
     name='megad2',
     python_requires='>3.7',
-    version='0.1',
+    install_requirements=['aiohttp'],
+    version='0.3',
     packages=['megad'],
-    url='',
+    url='https://github.com/andvikt/megad2',
     license='BSD',
     author='andrewgermanovich',
     author_email='andvikt@gmail.com',
