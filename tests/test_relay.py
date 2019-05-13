@@ -1,5 +1,4 @@
 from logging import basicConfig, DEBUG
-import aiohttp
 
 basicConfig(level=DEBUG)
 

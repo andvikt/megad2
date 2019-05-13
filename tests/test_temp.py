@@ -1,5 +1,4 @@
 from logging import basicConfig, DEBUG
-import aiohttp
 
 basicConfig(level=DEBUG)
 
@@ -21,3 +20,10 @@ async def main():
     await ow.update()
 
 asyncio.get_event_loop().run_until_complete(main())
+
+# регулярное обновление
+
+async def reg_update(interval):
+    await asyncio.sleep(interval)
+    await ow.update()
+    asyncio.ensure_future(reg_update(interval))

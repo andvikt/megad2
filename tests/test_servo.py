@@ -1,5 +1,4 @@
 from logging import basicConfig, DEBUG
-import aiohttp
 
 basicConfig(level=DEBUG)
 
@@ -18,7 +17,6 @@ servo = Servo(dir_rel=Relay(mega, 15)
               , close_time=12
               , calibrated_cb=print_calibrated
               , value_set_cb=print_new_value)
-
 
 async def main():
     await servo.calibrate()
