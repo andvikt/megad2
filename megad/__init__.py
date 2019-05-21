@@ -204,3 +204,15 @@ class OneWireBus(object):
                     asyncio.ensure_future(foo(temp))
                 else:
                     foo(temp)
+
+class SpeedSelect(object):
+
+    def __init__(self, mega: Mega, pins: typing.List[int]):
+        self.pins = pins
+        self.mega = mega
+
+    async def set_value(self, value):
+        assert 0<=value<=len(self.pins), f'can not set {value}'
+        await self.mega.request(pt=self.pins[0], cmd=';'.join([f'{x}:0' for x in self.pins]))
+        if value > 0:
+            await self.mega.request(pt=self.pins[value-1], cmd=f'{self.pins[value-1]}:1')
