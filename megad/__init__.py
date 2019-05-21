@@ -18,7 +18,7 @@ DIR_DOWN = 0
 MAX_P_TIME = 0.25
 
 InputQuery = namedtuple('InputQuery', ['pt', 'click', 'cnt', 'm'], defaults=[0]*4)
-lg = getLogger(__name__)
+lg = getLogger('megad_api')
 
 class MegaException(Exception):
     pass

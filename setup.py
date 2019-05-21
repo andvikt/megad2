@@ -4,7 +4,7 @@ setup(
     name='megad2',
     python_requires='>3.7',
     install_requirements=['aiohttp'],
-    version='0.3.2',
+    version='0.3.4',
     packages=['megad'],
     url='https://github.com/andvikt/megad2',
     license='BSD',
