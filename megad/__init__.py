@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from collections import namedtuple
 from logging import getLogger, basicConfig
 import attr
+from functools import partial
 
 basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -68,6 +69,17 @@ class Mega(object):
             else:
                 cb(query)
         return web.Response(text='OK')
+
+    def map_callback(self, key: InputQuery, foo):
+        if key in self.cb_map:
+            raise KeyError(f'{key} already registered')
+        self.cb_map[key] = foo
+        return foo
+
+    def map_callback_deco(self, key: InputQuery):
+        def deco(foo):
+            return self.map_callback(key, foo)
+        return deco
 
     async def start_listen(self, port):
         """
