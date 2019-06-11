@@ -10,6 +10,7 @@ import asyncio
 from urllib.parse import urlencode
 from collections import namedtuple
 from logging import getLogger, basicConfig
+import attr
 
 basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -103,39 +104,38 @@ class Relay(object):
                                 , cmd=f'{self.port}:{int(not self.reverse)};p{p};{self.port}:{int(self.reverse)}')
 
 
+@attr.s
 class Servo(object):
     """
     Серво-привод на двух реле
     Во время движения блокирует всю мегу, на старте калибруется путем полного прогона в закрытое состояние,
         и не доступно для управления пока не закончится калибровка, по завершении калибровки вызывается калибровочный
         кол-бэк (в нем можно например вызвать установку текущего значения)
-    """
-    def __init__(self
-                 , move_rel: Relay
-                 , dir_rel: Relay
-                 , close_time: int
-                 , calibrate: bool = False
-                 , calibrated_cb: typing.Callable = None
-                 , value_set_cb: typing.Callable = None
-                 ):
-        """
 
-        :param move_rel: реле для движения
-        :param dir_rel: реле для выбора направления
-        :param close_time: время закрытия
-        :param calibrate: если True, инициировать калибровку сразу после создания
-        :param calibrated_cb: колбэк, вызывается по завершении калибровки
-        :param value_set_cb: колбэк, вызывается по завершении работы привода с новым значением текущего положения
-            в качестве параметра (можно использовать для уведомления сервера о новом положении привода)
-        """
-        self.move_rel = move_rel
-        self.dir_rel = dir_rel
-        self.close_time = close_time
-        self._value: float = 0
-        self.calibrated_cb = calibrated_cb
-        self.value_set_cb = value_set_cb
-        self.lck = asyncio.locks.Lock()
-        if calibrate:
+    :param move_rel: реле для движения
+    :param dir_rel: реле для выбора направления
+    :param close_time: время закрытия
+    :param calibrate: если True, инициировать калибровку сразу после создания
+    :param calibrated_cb: колбэк, вызывается по завершении калибровки
+    :param value_set_cb: колбэк, вызывается по завершении работы привода с новым значением текущего положения
+        в качестве параметра (можно использовать для уведомления сервера о новом положении привода)
+    """
+    move_rel: Relay = attr.ib()
+    dir_rel: Relay = attr.ib()
+    close_time: int = attr.ib()
+    _calibrate: bool = attr.ib(default=True)
+    calibrated_cb: typing.Callable = attr.ib(default=None)
+    value_set_cb: typing.Callable = attr.ib(default=None)
+    mega: Mega = attr.ib(default=None)
+    _value: float = 0
+    lck: asyncio.Lock = attr.ib(factory=asyncio.Lock, init=False)
+
+    def __attrs_post_init__(self):
+        if isinstance(self.move_rel, int):
+            self.move_rel = Relay(self.mega, self.move_rel)
+        if isinstance(self.dir_rel, int):
+            self.move_rel = Relay(self.mega, self.dir_rel)
+        if self._calibrate:
             asyncio.ensure_future(self.calibrate())
 
     @property

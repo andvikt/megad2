@@ -3,7 +3,8 @@ from distutils.core import setup
 setup(
     name='megad2',
     python_requires='>3.7',
-    install_requirements=['aiohttp'],
+    tests_require=['pytest', 'pytest-asyncio', 'pytest-mock'],
+    install_requires=['aiohttp', 'attrs'],
     version='0.3.4',
     packages=['megad'],
     url='https://github.com/andvikt/megad2',
