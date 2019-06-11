@@ -5,7 +5,7 @@ setup(
     python_requires='>3.7',
     tests_require=['pytest', 'pytest-asyncio', 'pytest-mock'],
     install_requires=['aiohttp', 'attrs'],
-    version='0.3.4',
+    version='0.3.5',
     packages=['megad'],
     url='https://github.com/andvikt/megad2',
     license='BSD',
