@@ -15,6 +15,8 @@ from functools import partial
 
 basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+_MapKey = typing.TypeVar('_MapKey')
+
 DIR_UP = 1
 DIR_DOWN = 0
 MAX_P_TIME = 0.25
@@ -31,7 +33,24 @@ class Unauthorised(MegaException):
 def make_query(query: dict):
     return '&'.join([f'{x}={y}' for x, y in query.items()])
 
-class Mega(object):
+
+class _MapCallback(typing.Generic[_MapKey]):
+
+    cb_map: typing.Dict[_MapKey, typing.Callable[[_MapKey], ...]]
+
+    def map_callback(self, key: _MapKey, foo):
+        if key in self.cb_map:
+            raise KeyError(f'{key} already registered')
+        self.cb_map[key] = foo
+        return foo
+
+    def map_callback_deco(self, key: InputQuery):
+        def deco(foo):
+            return self.map_callback(key, foo)
+        return deco
+
+
+class Mega(_MapCallback[InputQuery]):
 
     def __init__(self
                  , host
@@ -70,16 +89,6 @@ class Mega(object):
                 cb(query)
         return web.Response(text='OK')
 
-    def map_callback(self, key: InputQuery, foo):
-        if key in self.cb_map:
-            raise KeyError(f'{key} already registered')
-        self.cb_map[key] = foo
-        return foo
-
-    def map_callback_deco(self, key: InputQuery):
-        def deco(foo):
-            return self.map_callback(key, foo)
-        return deco
 
     async def start_listen(self, port):
         """
@@ -184,7 +193,7 @@ class Servo(object):
                     self.value_set_cb(self._value)
 
 
-class OneWireBus(object):
+class OneWireBus(object, _MapCallback[str]):
 
     def __init__(self, mega: Mega, port: int, cb_map: typing.Mapping[str, typing.Callable[[float], typing.Any]] = None):
         """
