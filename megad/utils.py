@@ -16,12 +16,12 @@ class AppContainer:
 
     appRunner = attr.ib(type=web.AppRunner)
     @appRunner.default
-    def app_runner(self):
+    def app_runner_def(self):
         return web.AppRunner(self._app)
 
     site = attr.ib(type=web.TCPSite)
     @site.default
-    def site(self):
+    def site_def(self):
         return web.TCPSite(self.appRunner, self.host, self.port)
 
     def get(self, path, **kwargs):
