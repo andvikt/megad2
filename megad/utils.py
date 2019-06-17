@@ -19,10 +19,7 @@ class AppContainer:
     def app_runner_def(self):
         return web.AppRunner(self._app)
 
-    site = attr.ib(type=web.TCPSite)
-    @site.default
-    def site_def(self):
-        return web.TCPSite(self.appRunner, self.host, self.port)
+    site = attr.ib(type=web.TCPSite, default=None)
 
     def get(self, path, **kwargs):
         return self._route.get(path, **kwargs)
@@ -33,6 +30,7 @@ class AppContainer:
     async def start(self):
         self._app.add_routes(self._route)
         await self.appRunner.setup()
+        self.site = web.TCPSite(self.appRunner, self.host, self.port)
         await self.site.start()
 
     def get_app(self):
