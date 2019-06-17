@@ -32,6 +32,7 @@ class AppContainer:
 
     async def start(self):
         self._app.add_routes(self._route)
+        await self.appRunner.setup()
         await self.site.start()
 
     def get_app(self):
