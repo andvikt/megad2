@@ -47,7 +47,7 @@ class Servo(object):
     move_rel: typing.Union[Relay, int] = attr.ib()
     dir_rel: typing.Union[Relay, int] = attr.ib()
     close_time: int = attr.ib()
-    _calibrate: bool = attr.ib(default=True)
+    to_calibrate: bool = attr.ib(default=True)
     calibrated_cb: typing.Callable = attr.ib(default=None)
     value_set_cb: typing.Callable = attr.ib(default=None)
     mega: Mega = attr.ib(default=None)
@@ -59,7 +59,7 @@ class Servo(object):
             self.move_rel = Relay(self.mega, self.move_rel)
         if isinstance(self.dir_rel, int):
             self.dir_rel = Relay(self.mega, self.dir_rel)
-        if self._calibrate:
+        if self.to_calibrate:
             asyncio.ensure_future(self.calibrate())
 
     @property
